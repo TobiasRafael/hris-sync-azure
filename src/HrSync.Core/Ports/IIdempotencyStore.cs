@@ -1,12 +1,5 @@
 namespace HrSync.Core.Ports;
 
-public enum ClaimResult
-{
-    Claimed,
-    AlreadyCompleted,
-    InProgress,
-}
-
 // Tracks webhook events by EventId so a redelivered or resent event is processed at most once.
 public interface IIdempotencyStore
 {

@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json.Serialization;
 using HrSync.Adapters.Hris;
 using HrSync.Core.Models;
 using HrSync.Core.Security;
@@ -10,18 +9,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace HrSync.Functions.Webhooks;
-
-public sealed record WebhookAccepted([property: JsonPropertyName("correlation_id")] string CorrelationId);
-
-public sealed class WebhookReceiverOutput
-{
-    [HttpResult]
-    public required IActionResult Result { get; init; }
-
-    // Null for every response except 202, so nothing is queued.
-    [QueueOutput(WebhookReceiver.QueueName)]
-    public NewHireMessage? Message { get; init; }
-}
 
 // Fast ack: verify, parse, enqueue, return. No outbound calls; the queue consumer does the work.
 public sealed class WebhookReceiver(IOptions<WebhookOptions> options, TimeProvider time, ILogger<WebhookReceiver> logger)

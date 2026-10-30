@@ -6,20 +6,6 @@ using Microsoft.Extensions.Options;
 
 namespace HrSync.MockApis.Webhooks;
 
-public sealed class WebhookSettings
-{
-    public const string SectionName = "Webhook";
-
-    public string Url { get; set; } = "http://localhost:7071/api/webhooks/hris";
-    public string Secret { get; set; } = "";
-}
-
-public sealed record WebhookEvent(string EventId, string EventType, string EmployeeId, DateTimeOffset OccurredAt);
-
-// Outcome of one delivery attempt. StatusCode is null when the receiver couldn't be reached.
-public sealed record WebhookDelivery(
-    string EventId, string Url, string CorrelationId, bool Tampered, int? StatusCode, string? Error);
-
 // Signs and POSTs HRIS events. Deliberately its own HMAC code (no HrSync.Core reference), same algorithm:
 // "sha256=" + lowercase hex HMAC-SHA256(secret, "{unix seconds}.{body}").
 public sealed class WebhookSender(HttpClient http, IOptions<WebhookSettings> settings, MockState state)

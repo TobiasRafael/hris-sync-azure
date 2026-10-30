@@ -1,18 +1,5 @@
 namespace HrSync.MockApis.Faults;
 
-public sealed record FaultRule
-{
-    public int FailNext { get; init; }
-    public int StatusCode { get; init; } = 503;
-    public int? RetryAfterSeconds { get; init; }
-    public int DelayMs { get; init; }
-}
-
-public sealed record FaultStatus(FaultRule Rule, int Remaining);
-
-// What the middleware should do for one request. Failure is null when the request passes through.
-public sealed record FaultDecision(int DelayMs, FaultRule? Failure);
-
 public sealed class FaultInjector
 {
     public static readonly IReadOnlyList<string> Targets = ["hris", "care"];
