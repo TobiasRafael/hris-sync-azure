@@ -3,6 +3,14 @@
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
-    "Webhook__Secret": "<same value as Webhook:Secret in src/HrSync.MockApis/appsettings.Development.json>"
+    "Webhook__Secret": "<same value as Webhook:Secret in src/HrSync.MockApis/appsettings.Development.json>",
+    "HrisApi__BaseUrl": "http://localhost:5080",
+    "CareApi__BaseUrl": "http://localhost:5080",
+    "FieldMapping__Fields__GivenName": "FirstName",
+    "FieldMapping__Fields__FamilyName": "LastName",
+    "FieldMapping__Fields__Email": "WorkEmail",
+    "FieldMapping__Fields__Phone": "MobilePhone",
+    "FieldMapping__Fields__Role": "JobTitle",
+    "FieldMapping__Fields__StartDate": "HireDate"
   }
 }
