@@ -141,3 +141,145 @@ X-HrSync-Signature: sha256=00000000000000000000000000000000000000000000000000000
 X-Correlation-Id: manual-bad-signature
 
 {"event_id":"evt-manual","event_type":"employee.hired","employee_id":"E-1001","occurred_at":"2026-11-02T08:00:00Z"}
+
+### ---------------------------------------------------------------------------
+### Step 4: end-to-end sync (mock + Functions host + Azurite). Wait a few seconds
+### after each trigger for the queue to be processed, then check /care/workers.
+### ---------------------------------------------------------------------------
+
+### 4.0 Start clean
+POST {{mock}}/admin/reset
+
+### 4.1 Create employee -> webhook -> queue -> ProcessNewHire -> worker E-3001 created in care
+# @name hire
+POST {{mock}}/admin/hris/employees
+Content-Type: application/json
+
+{
+  "employee_id": "E-3001",
+  "first_name": "Ana",
+  "last_name": "Ruiz",
+  "work_email": "ana.ruiz@example.com",
+  "mobile_phone": "+1-555-0301",
+  "job_title": "Caregiver",
+  "hire_date": "2026-11-16"
+}
+
+### 4.1 check: E-3001 exists in care
+GET {{mock}}/care/workers/E-3001
+
+### 4.2 Resend the SAME event -> 202, but idempotency skips it (log: "Skipped"; no new PUT in /admin/requests)
+POST {{mock}}/admin/hris/webhooks/{{hire.response.body.$.webhook.event_id}}/resend
+
+### 4.3a Next 3 care requests fail with 503 + Retry-After: 1 (absorbed by in-process retries)
+PUT {{mock}}/admin/faults/care
+Content-Type: application/json
+
+{ "fail_next": 3, "status_code": 503, "retry_after_seconds": 1 }
+
+### 4.3b Create employee -> still synced; /admin/requests shows 3x "503 (injected)" then 2xx
+POST {{mock}}/admin/hris/employees
+Content-Type: application/json
+
+{
+  "employee_id": "E-3002",
+  "first_name": "Ben",
+  "last_name": "Ortiz",
+  "job_title": "Scheduler",
+  "hire_date": "2026-11-16"
+}
+
+### 4.4a Next 2 hris requests fail with 429 + Retry-After: 2
+PUT {{mock}}/admin/faults/hris
+Content-Type: application/json
+
+{ "fail_next": 2, "status_code": 429, "retry_after_seconds": 2 }
+
+### 4.4b Create employee -> synced after the 429s (~4 s of Retry-After waits)
+POST {{mock}}/admin/hris/employees
+Content-Type: application/json
+
+{
+  "employee_id": "E-3003",
+  "first_name": "Cora",
+  "last_name": "Vega",
+  "job_title": "Caregiver",
+  "hire_date": "2026-11-16"
+}
+
+### 4.5a Sparse update must not wipe data: pre-create Bob (E-1002) in care WITH a phone and email
+PUT {{mock}}/care/workers/E-1002
+Content-Type: application/json
+
+{
+  "given_name": "Bob",
+  "family_name": "Jones",
+  "email": "bob.jones@care.example.com",
+  "phone": "+1-555-0102",
+  "role": "Trainee",
+  "start_date": "2026-11-09"
+}
+
+### 4.5b Fire Bob's hire event (HRIS record has empty work_email and null phone)
+POST {{mock}}/admin/hris/employees
+Content-Type: application/json
+
+{
+  "employee_id": "E-1002",
+  "first_name": "Bob",
+  "last_name": "Jones",
+  "work_email": "",
+  "personal_email": null,
+  "mobile_phone": null,
+  "job_title": "Scheduler",
+  "hire_date": "2026-11-09"
+}
+
+### 4.5 check: phone and email kept, role updated to Scheduler
+GET {{mock}}/care/workers/E-1002
+
+### 4.6 Empty last name -> care API 400 -> permanent -> envelope in "new-hires-poison", not retried
+POST {{mock}}/admin/hris/employees
+Content-Type: application/json
+
+{
+  "employee_id": "E-3004",
+  "first_name": "Dina",
+  "last_name": "",
+  "job_title": "Caregiver",
+  "hire_date": "2026-11-16"
+}
+
+### 4.7a Care is down for a long time: fail the next 50 care requests with 503
+PUT {{mock}}/admin/faults/care
+Content-Type: application/json
+
+{ "fail_next": 50, "status_code": 503 }
+
+### 4.7b Create employee -> retried in-process (4 attempts) and by the queue (5 dequeues),
+### then the runtime moves the raw message to "new-hires-poison" (takes a few minutes)
+POST {{mock}}/admin/hris/employees
+Content-Type: application/json
+
+{
+  "employee_id": "E-3005",
+  "first_name": "Eli",
+  "last_name": "Mora",
+  "job_title": "Caregiver",
+  "hire_date": "2026-11-16"
+}
+
+### 4.7c Clear the care fault when done
+PUT {{mock}}/admin/faults/care
+Content-Type: application/json
+
+{ "fail_next": 0 }
+
+### Checks: vendor request log (injected faults, retries, PUTs) and the care workers
+GET {{mock}}/admin/requests
+
+###
+GET {{mock}}/care/workers
+
+###
+GET {{mock}}/admin/faults
