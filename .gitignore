@@ -55,3 +55,37 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# ---- Visual Studio ----
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+.idea/
+
+# ---- Azure Functions: local secrets (NEVER commit) ----
+local.settings.json
+
+# ---- Azurite (local storage emulator data) ----
+__azurite_db*.json
+__blobstorage__/
+__queuestorage__/
+__tablestorage__/
+AzuriteConfig
+
+# ---- Publish profiles / deployment ----
+*.pubxml.user
+*.publishsettings
+PublishProfiles/
+
+# ---- Test coverage ----
+coverage*.json
+coverage*.xml
+*.coverage
+TestResults/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db

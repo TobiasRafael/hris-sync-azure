@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="HrSync.Functions/HrSync.Functions.csproj" Id="72773484-5b02-4e54-bd52-f8441ffcb6bf" />
+    <Project Path="src/HrSync.Adapters/HrSync.Adapters.csproj" />
+    <Project Path="src/HrSync.Core/HrSync.Core.csproj" />
+    <Project Path="src/HrSync.MockApis/HrSync.MockApis.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HrSync.Core.Tests/HrSync.Core.Tests.csproj" />
+  </Folder>
+</Solution>
