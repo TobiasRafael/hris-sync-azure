@@ -1,4 +1,5 @@
 @mock = http://localhost:5080
+@func = http://localhost:7071/api
 
 ### Start clean: reseed stores, clear log and faults
 POST {{mock}}/admin/reset
@@ -94,3 +95,49 @@ GET {{mock}}/admin/requests
 
 ### Reset stores, log and faults
 POST {{mock}}/admin/reset
+
+### ---------------------------------------------------------------------------
+### Step 3: signed webhooks (needs the Functions host + Azurite running)
+### ---------------------------------------------------------------------------
+
+### Create employee -> fires signed "employee.hired" webhook (receiver answers 202, message lands in "new-hires")
+# @name created
+POST {{mock}}/admin/hris/employees
+Content-Type: application/json
+
+{
+  "employee_id": "E-2001",
+  "first_name": "Carla",
+  "last_name": "Diaz",
+  "work_email": "carla.diaz@example.com",
+  "mobile_phone": "+1-555-0201",
+  "job_title": "Caregiver",
+  "hire_date": "2026-11-16"
+}
+
+### Same, but with a bad signature (webhook.status_code should be 401; nothing queued)
+POST {{mock}}/admin/hris/employees?tamper=true
+Content-Type: application/json
+
+{
+  "employee_id": "E-2002",
+  "first_name": "Dan",
+  "last_name": "Lee",
+  "job_title": "Scheduler",
+  "hire_date": "2026-11-16"
+}
+
+### Resend the SAME event (same event_id, fresh timestamp/signature) -> 202 again
+POST {{mock}}/admin/hris/webhooks/{{created.response.body.$.webhook.event_id}}/resend
+
+### Sent events (event ids for resend)
+GET {{mock}}/admin/hris/webhooks
+
+### Direct POST to the receiver with a bad signature -> 401
+POST {{func}}/webhooks/hris
+Content-Type: application/json
+X-HrSync-Timestamp: 1798880400
+X-HrSync-Signature: sha256=0000000000000000000000000000000000000000000000000000000000000000
+X-Correlation-Id: manual-bad-signature
+
+{"event_id":"evt-manual","event_type":"employee.hired","employee_id":"E-1001","occurred_at":"2026-11-02T08:00:00Z"}

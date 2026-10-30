@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using HrSync.MockApis.Care;
 using HrSync.MockApis.Hris;
+using HrSync.MockApis.Webhooks;
 
 namespace HrSync.MockApis;
 
@@ -15,6 +16,9 @@ public sealed class MockState
 
     public ConcurrentDictionary<string, HrisEmployee> Employees { get; } = new();
     public ConcurrentDictionary<string, CareWorkerDto> CareWorkers { get; } = new();
+
+    // Every webhook event sent, keyed by event_id, so it can be resent unchanged.
+    public ConcurrentDictionary<string, WebhookEvent> SentEvents { get; } = new();
 
     public MockState() => Reset();
 
@@ -31,6 +35,7 @@ public sealed class MockState
     {
         Employees.Clear();
         CareWorkers.Clear();
+        SentEvents.Clear();
         _log.Clear();
 
         Employees["E-1001"] = new HrisEmployee(

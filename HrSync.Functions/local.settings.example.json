@@ -1,0 +1,8 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "Webhook__Secret": "<same value as Webhook:Secret in src/HrSync.MockApis/appsettings.Development.json>"
+  }
+}
