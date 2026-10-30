@@ -2,15 +2,6 @@ using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace HrSync.MockApis.Care;
 
-public sealed record CareWorkerDto(
-    string? ExternalId,
-    string? GivenName,
-    string? FamilyName,
-    string? Email,
-    string? Phone,
-    string? Role,
-    DateOnly? StartDate);
-
 public static class CareEndpoints
 {
     public static IEndpointRouteBuilder MapCare(this IEndpointRouteBuilder app)

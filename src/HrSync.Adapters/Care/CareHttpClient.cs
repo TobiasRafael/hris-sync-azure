@@ -9,18 +9,18 @@ namespace HrSync.Adapters.Care;
 // Typed HttpClient; BaseAddress comes from CareApi:BaseUrl.
 public sealed class CareHttpClient(HttpClient http) : ICareClient
 {
-    private const string System = "Care API";
+    private const string SystemName = "Care API";
 
     public async Task<CareWorker?> GetWorkerAsync(string externalId, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(externalId);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, WorkerPath(externalId));
-        using var response = await VendorHttp.SendAsync(http, request, System, allowNotFound: true, ct);
+        using var response = await VendorHttp.SendAsync(http, request, SystemName, allowNotFound: true, ct);
         if (response.StatusCode == HttpStatusCode.NotFound)
             return null;
 
-        var dto = await VendorHttp.ReadJsonAsync<CareWorkerDto>(response, System, ct);
+        var dto = await VendorHttp.ReadJsonAsync<CareWorkerDto>(response, SystemName, ct);
         return new CareWorker
         {
             ExternalId = string.IsNullOrWhiteSpace(dto.ExternalId) ? externalId : dto.ExternalId,
@@ -46,7 +46,7 @@ public sealed class CareHttpClient(HttpClient http) : ICareClient
         {
             Content = JsonContent.Create(dto, options: VendorJson.Options),
         };
-        using var response = await VendorHttp.SendAsync(http, request, System, allowNotFound: false, ct);
+        using var response = await VendorHttp.SendAsync(http, request, SystemName, allowNotFound: false, ct);
     }
 
     private static string WorkerPath(string externalId) => $"care/workers/{Uri.EscapeDataString(externalId)}";

@@ -1,4 +1,4 @@
-namespace HrSync.Adapters.Hris;
+namespace HrSync.Adapters.Enums;
 
 public enum WebhookParseStatus
 {

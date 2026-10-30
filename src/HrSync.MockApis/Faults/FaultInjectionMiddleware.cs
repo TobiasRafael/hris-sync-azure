@@ -1,7 +1,5 @@
 namespace HrSync.MockApis.Faults;
 
-public sealed record FaultError(string Error, string Target, int Status);
-
 // Applies configured faults to /hris and /care only, and logs every vendor call.
 public sealed class FaultInjectionMiddleware(RequestDelegate next, FaultInjector faults, MockState state)
 {
@@ -38,10 +36,4 @@ public sealed class FaultInjectionMiddleware(RequestDelegate next, FaultInjector
         path.StartsWithSegments("/hris") ? "hris"
         : path.StartsWithSegments("/care") ? "care"
         : null;
-}
-
-public static class FaultInjectionExtensions
-{
-    public static IApplicationBuilder UseFaultInjection(this IApplicationBuilder app) =>
-        app.UseMiddleware<FaultInjectionMiddleware>();
 }

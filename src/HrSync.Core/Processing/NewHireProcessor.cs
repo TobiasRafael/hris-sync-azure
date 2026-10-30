@@ -1,3 +1,4 @@
+using HrSync.Core.Enums;
 using HrSync.Core.Errors;
 using HrSync.Core.Mapping;
 using HrSync.Core.Models;
@@ -5,12 +6,6 @@ using HrSync.Core.Ports;
 using HrSync.Core.Rules;
 
 namespace HrSync.Core.Processing;
-
-public enum ProcessResult
-{
-    Synced,
-    Skipped,
-}
 
 // claim -> fetch employee -> map -> merge onto existing worker -> upsert -> mark completed.
 // Permanent failures are recorded and rethrown; anything else releases the claim and is rethrown for retry.

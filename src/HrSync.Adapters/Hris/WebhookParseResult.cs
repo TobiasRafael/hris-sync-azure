@@ -1,3 +1,4 @@
+using HrSync.Adapters.Enums;
 using HrSync.Core.Models;
 
 namespace HrSync.Adapters.Hris;

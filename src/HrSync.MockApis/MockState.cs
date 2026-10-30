@@ -5,8 +5,6 @@ using HrSync.MockApis.Webhooks;
 
 namespace HrSync.MockApis;
 
-public sealed record RequestLogEntry(DateTimeOffset Timestamp, string Entry);
-
 // In-memory stand-in for both vendor databases, plus a capped log of vendor calls.
 public sealed class MockState
 {

@@ -5,8 +5,6 @@ using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace HrSync.MockApis;
 
-public sealed record EmployeeCreated(HrisEmployee Employee, WebhookDelivery Webhook);
-
 public static class AdminEndpoints
 {
     public static IEndpointRouteBuilder MapAdmin(this IEndpointRouteBuilder app)
