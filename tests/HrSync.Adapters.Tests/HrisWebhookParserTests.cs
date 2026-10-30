@@ -1,3 +1,4 @@
+using HrSync.Adapters.Enums;
 using HrSync.Adapters.Hris;
 
 namespace HrSync.Adapters.Tests;

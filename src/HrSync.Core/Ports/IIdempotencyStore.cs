@@ -1,3 +1,5 @@
+using HrSync.Core.Enums;
+
 namespace HrSync.Core.Ports;
 
 // Tracks webhook events by EventId so a redelivered or resent event is processed at most once.

@@ -1,4 +1,4 @@
-namespace HrSync.Core.Processing;
+namespace HrSync.Core.Enums;
 
 public enum ProcessResult
 {

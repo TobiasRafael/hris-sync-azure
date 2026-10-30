@@ -1,4 +1,4 @@
-namespace HrSync.Core.Ports;
+namespace HrSync.Core.Enums;
 
 public enum ClaimResult
 {

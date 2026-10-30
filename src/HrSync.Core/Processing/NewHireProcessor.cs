@@ -1,3 +1,4 @@
+using HrSync.Core.Enums;
 using HrSync.Core.Errors;
 using HrSync.Core.Mapping;
 using HrSync.Core.Models;

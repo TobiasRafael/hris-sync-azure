@@ -1,4 +1,5 @@
 using System.Text.Json;
+using HrSync.Adapters.Enums;
 using HrSync.Adapters.Http;
 using HrSync.Core.Models;
 

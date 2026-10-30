@@ -1,4 +1,5 @@
 using System.Text;
+using HrSync.Adapters.Enums;
 using HrSync.Adapters.Hris;
 using HrSync.Core.Models;
 using HrSync.Core.Security;
