@@ -1,38 +1,13 @@
 using System.Text.Json;
+using HrSync.Adapters.Http;
 using HrSync.Core.Models;
 
 namespace HrSync.Adapters.Hris;
-
-public enum WebhookParseStatus
-{
-    Hire,
-    Ignored,
-    Invalid,
-}
-
-// Hire: Event is set. Ignored: a well-formed event of a type we don't handle. Invalid: Error says why.
-public sealed record WebhookParseResult(
-    WebhookParseStatus Status, NewHireEvent? Event, string? EventId, string? EventType, string? Error)
-{
-    public static WebhookParseResult Hire(NewHireEvent hire, string eventType) =>
-        new(WebhookParseStatus.Hire, hire, hire.EventId, eventType, null);
-
-    public static WebhookParseResult Ignored(string eventId, string eventType) =>
-        new(WebhookParseStatus.Ignored, null, eventId, eventType, null);
-
-    public static WebhookParseResult Invalid(string error, string? eventId = null) =>
-        new(WebhookParseStatus.Invalid, null, eventId, null, error);
-}
 
 // Vendor webhook JSON (snake_case) -> NewHireEvent.
 public static class HrisWebhookParser
 {
     public const string HireEventType = "employee.hired";
-
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-    };
 
     private sealed record Payload(string? EventId, string? EventType, string? EmployeeId, DateTimeOffset? OccurredAt);
 
@@ -41,7 +16,7 @@ public static class HrisWebhookParser
         Payload? payload;
         try
         {
-            payload = JsonSerializer.Deserialize<Payload>(body, Json);
+            payload = JsonSerializer.Deserialize<Payload>(body, VendorJson.Options);
         }
         catch (JsonException ex)
         {
