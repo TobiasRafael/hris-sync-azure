@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using HrSync.Core.Diagnostics;
 using HrSync.Core.Enums;
 using HrSync.Core.Errors;
 using HrSync.Core.Mapping;
@@ -215,6 +217,38 @@ public class NewHireProcessorTests
         Assert.Single(_store.Completed);
     }
 
+    [Fact]
+    public async Task Each_step_is_a_span_tagged_with_event_and_correlation_id()
+    {
+        _hris.Employees[Alice.Id] = Alice;
+        using var capture = new SpanCapture();
+
+        using (capture.StartRoot())
+            await Processor().ProcessAsync(MessageFor("E-1001"), CancellationToken.None);
+
+        var spans = capture.Spans();
+        Assert.Equal(["claim", "get-employee", "merge", "upsert"], spans.Select(a => a.OperationName));
+        Assert.All(spans, a =>
+        {
+            Assert.Equal(HrSyncTelemetry.SourceName, a.Source.Name);
+            Assert.Equal("evt-1", a.GetTagItem(HrSyncTelemetry.EventIdTag));
+            Assert.Equal("corr-1", a.GetTagItem(HrSyncTelemetry.CorrelationIdTag));
+        });
+    }
+
+    [Fact]
+    public async Task Failing_step_span_is_marked_as_error()
+    {
+        using var capture = new SpanCapture();
+
+        using (capture.StartRoot())
+            await Assert.ThrowsAsync<PermanentIntegrationException>(
+                () => Processor().ProcessAsync(MessageFor("E-404"), CancellationToken.None));
+
+        var getEmployee = Assert.Single(capture.Spans(), a => a.OperationName == "get-employee");
+        Assert.Equal(ActivityStatusCode.Error, getEmployee.Status);
+    }
+
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
@@ -292,5 +326,43 @@ public class NewHireProcessorTests
             Released.Add(eventId);
             return Task.CompletedTask;
         }
+    }
+
+    // Collects HrSync spans under one test-owned root, so spans from tests running in parallel are ignored.
+    private sealed class SpanCapture : IDisposable
+    {
+        private static readonly ActivitySource TestSource = new("HrSync.Core.Tests");
+        private readonly ActivityListener _listener;
+        private readonly List<Activity> _stopped = [];
+        private ActivityTraceId _traceId;
+
+        public SpanCapture()
+        {
+            _listener = new ActivityListener
+            {
+                ShouldListenTo = s => s.Name is HrSyncTelemetry.SourceName or "HrSync.Core.Tests",
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStopped = a => { lock (_stopped) _stopped.Add(a); },
+            };
+            ActivitySource.AddActivityListener(_listener);
+        }
+
+        public Activity StartRoot()
+        {
+            var root = TestSource.StartActivity("test-root")!;
+            _traceId = root.TraceId;
+            return root;
+        }
+
+        public List<Activity> Spans()
+        {
+            lock (_stopped)
+                return _stopped
+                    .Where(a => a.TraceId == _traceId && a.Source.Name == HrSyncTelemetry.SourceName)
+                    .OrderBy(a => a.StartTimeUtc)
+                    .ToList();
+        }
+
+        public void Dispose() => _listener.Dispose();
     }
 }
