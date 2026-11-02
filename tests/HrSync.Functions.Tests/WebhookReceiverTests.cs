@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using HrSync.Core.Security;
 using HrSync.Functions.Webhooks;
@@ -108,6 +109,24 @@ public class WebhookReceiverTests
         Assert.Equal("E-1001", output.Message.Event.EmployeeId);
         Assert.Equal(new DateTimeOffset(2026, 11, 2, 8, 59, 0, TimeSpan.Zero), output.Message.Event.OccurredAt);
         Assert.Equal(Now, output.Message.ReceivedAt);
+    }
+
+    [Fact]
+    public async Task Queued_message_carries_the_current_trace_so_the_consumer_can_continue_it()
+    {
+        using var source = new ActivitySource("HrSync.Functions.Tests");
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = s => s.Name is "HrSync.Functions.Tests" or "HrSync",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+        };
+        ActivitySource.AddActivityListener(listener);
+        using var request = source.StartActivity("POST api/webhooks/hris")!;
+
+        var output = await Receiver().Run(Request(HireBody));
+
+        Assert.True(ActivityContext.TryParse(output.Message!.TraceParent, null, out var carried));
+        Assert.Equal(request.TraceId, carried.TraceId);
     }
 
     [Fact]

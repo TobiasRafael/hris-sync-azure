@@ -1,7 +1,10 @@
+using System.Diagnostics;
 using HrSync.Adapters.Correlation;
+using HrSync.Core.Diagnostics;
 using HrSync.Core.Errors;
 using HrSync.Core.Models;
 using HrSync.Core.Processing;
+using HrSync.Functions.Storage;
 using HrSync.Functions.Webhooks;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
@@ -19,10 +22,15 @@ public sealed class ProcessNewHire(
     ILogger<ProcessNewHire> logger)
 {
     [Function(nameof(ProcessNewHire))]
-    public async Task Run([QueueTrigger(WebhookReceiver.QueueName)] NewHireMessage message, CancellationToken ct)
+    public async Task Run([QueueTrigger(WebhookReceiver.QueueName, Connection = StorageConnection.Queues)] NewHireMessage message, CancellationToken ct)
     {
         var eventId = message.Event.EventId;
         correlation.CorrelationId = message.CorrelationId;
+
+        // The queue hop starts a new trace for this invocation; continue the webhook's trace instead
+        // (traceparent carried in the message) and link back to the invocation span.
+        using var span = HrSyncTelemetry.StartProcessing(
+            "process new-hire", message, Activity.Current?.Context ?? default);
         using var scope = logger.BeginScope(new Dictionary<string, object>
         {
             ["CorrelationId"] = message.CorrelationId,
@@ -37,12 +45,14 @@ public sealed class ProcessNewHire(
         }
         catch (PermanentIntegrationException ex)
         {
+            span.RecordError(ex);
             await poison.SendAsync(new PoisonEnvelope(message, ex.Reason, time.GetUtcNow()), ct);
             logger.LogError(ex, "New hire {CorrelationId} event {EventId} failed permanently, sent to poison: {Reason}",
                 message.CorrelationId, eventId, ex.Reason);
         }
         catch (Exception ex)
         {
+            span.RecordError(ex);
             logger.LogWarning(ex, "New hire {CorrelationId} event {EventId} failed, will be retried: {Error}",
                 message.CorrelationId, eventId, ex.Message);
             throw;

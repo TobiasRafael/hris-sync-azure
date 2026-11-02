@@ -10,4 +10,9 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
   </ItemGroup>
 
+  <!-- Hosting defaults only (telemetry, health); MockApis must still not reference HrSync.Core. -->
+  <ItemGroup>
+    <ProjectReference Include="..\HrSync.ServiceDefaults\HrSync.ServiceDefaults.csproj" />
+  </ItemGroup>
+
 </Project>

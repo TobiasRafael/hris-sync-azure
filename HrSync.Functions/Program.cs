@@ -1,5 +1,4 @@
 using Azure.Data.Tables;
-using Azure.Monitor.OpenTelemetry.Exporter;
 using Azure.Storage.Queues;
 using HrSync.Adapters.DependencyInjection;
 using HrSync.Core.Mapping;
@@ -8,8 +7,10 @@ using HrSync.Core.Ports;
 using HrSync.Core.Processing;
 using HrSync.Functions.Idempotency;
 using HrSync.Functions.NewHires;
+using HrSync.Functions.Storage;
 using HrSync.Functions.Webhooks;
 using Microsoft.Azure.Functions.Worker.Builder;
+using Microsoft.Extensions.Azure;
 using Microsoft.Azure.Functions.Worker.OpenTelemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,13 +21,21 @@ var builder = FunctionsApplication.CreateBuilder(args);
 
 builder.ConfigureFunctionsWebApplication();
 
+// OpenTelemetry (OTLP to the Aspire dashboard when the AppHost sets OTEL_EXPORTER_OTLP_ENDPOINT),
+// health checks, service discovery, HttpClient resilience.
+builder.AddServiceDefaults();
+// Picks up the host's trace context for each invocation and tags spans with function metadata.
+// The "HrSync" ActivitySource (HrSyncTelemetry.SourceName) is added by ServiceDefaults.
+builder.Services.AddOpenTelemetry().UseFunctionsWorkerDefaults();
+
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddOptions<WebhookOptions>()
     .BindConfiguration(WebhookOptions.SectionName)
     .Validate(o => !string.IsNullOrWhiteSpace(o.Secret), "Webhook:Secret is required (Webhook__Secret).")
     .ValidateOnStart();
 
-// Field mapping is config-only (FieldMapping__Fields__<CareWorker prop> = <Employee prop>); invalid config stops startup.
+// Field mapping is config-only (appsettings.json, or FieldMapping__Fields__<CareWorker prop> = <Employee prop>);
+// invalid config stops startup.
 builder.Services.AddOptions<FieldMappingOptions>()
     .BindConfiguration("FieldMapping")
     .ValidateOnStart();
@@ -37,22 +46,15 @@ builder.Services.AddHrSyncAdapters(builder.Configuration);
 // Transient: it holds typed HttpClients, which shouldn't be captured by a singleton.
 builder.Services.AddTransient<NewHireProcessor>();
 
-// Same storage account as the queue triggers.
-var storage = builder.Configuration["AzureWebJobsStorage"];
-if (string.IsNullOrWhiteSpace(storage))
-    throw new InvalidOperationException("AzureWebJobsStorage is required (idempotency table and poison queue).");
+// Same connections as the triggers ("queues", "tables"): injected by the AppHost, or from local.settings.json.
+// Base64 matches what the Functions queue extension writes and expects (poison envelopes).
+builder.AddAzureQueueServiceClient(StorageConnection.Queues,
+    configureClientBuilder: b => b.ConfigureOptions(o => o.MessageEncoding = QueueMessageEncoding.Base64));
+builder.AddAzureTableServiceClient(StorageConnection.Tables);
 
-builder.Services.AddSingleton<IIdempotencyStore>(_ =>
-    new TableIdempotencyStore(new TableClient(storage, TableIdempotencyStore.TableName)));
-builder.Services.AddSingleton<IPoisonQueue>(_ =>
-    new StoragePoisonQueue(new QueueClient(storage, StoragePoisonQueue.QueueName,
-        new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 })));
-
-if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING")))
-{
-    builder.Services.AddOpenTelemetry()
-        .UseFunctionsWorkerDefaults()
-        .UseAzureMonitorExporter();
-}
+builder.Services.AddSingleton<IIdempotencyStore>(sp => new TableIdempotencyStore(
+    sp.GetRequiredService<TableServiceClient>().GetTableClient(TableIdempotencyStore.TableName)));
+builder.Services.AddSingleton<IPoisonQueue>(sp => new StoragePoisonQueue(
+    sp.GetRequiredService<QueueServiceClient>().GetQueueClient(StoragePoisonQueue.QueueName)));
 
 builder.Build().Run();
