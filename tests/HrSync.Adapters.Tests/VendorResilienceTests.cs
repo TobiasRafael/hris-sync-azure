@@ -70,6 +70,30 @@ public sealed class VendorResilienceTests : IDisposable
     }
 
     [Fact]
+    public async Task Host_wide_default_resilience_does_not_stack_on_vendor_retries()
+    {
+        // Aspire ServiceDefaults adds a standard resilience handler to every HttpClient. If it also wrapped
+        // the vendor clients, each of our 4 attempts would be retried 4 times (16 calls).
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["HrisApi:BaseUrl"] = _server.Url!,
+            ["CareApi:BaseUrl"] = _server.Url!,
+        }).Build();
+        var services = new ServiceCollection();
+        services.ConfigureHttpClientDefaults(http =>
+            http.AddStandardResilienceHandler(o => o.Retry.Delay = TimeSpan.FromMilliseconds(10)));
+        await using var provider = services
+            .AddHrSyncAdapters(configuration, o => o.Retry.Delay = TimeSpan.FromMilliseconds(10))
+            .BuildServiceProvider();
+        Sequence(EmployeePath, "GET", (503, null, null));
+
+        await Assert.ThrowsAsync<TransientIntegrationException>(
+            () => provider.GetRequiredService<IHrisClient>().GetEmployeeAsync("E-1001", CancellationToken.None));
+
+        Assert.Equal(4, Calls(EmployeePath));
+    }
+
+    [Fact]
     public async Task Two_503s_then_200_succeeds_after_retries()
     {
         Sequence(EmployeePath, "GET", (503, null, null), (503, null, null), (200, AliceJson, null));

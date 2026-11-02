@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Text;
 using HrSync.Adapters.Enums;
 using HrSync.Adapters.Hris;
+using HrSync.Core.Diagnostics;
 using HrSync.Core.Models;
 using HrSync.Core.Security;
 using Microsoft.AspNetCore.Http;
@@ -57,13 +59,21 @@ public sealed class WebhookReceiver(IOptions<WebhookOptions> options, TimeProvid
         }
 
         var hire = parsed.Event!;
+        var message = new NewHireMessage(hire, correlationId, now);
+        // Producer span for the enqueue; its context travels in the message so the consumer joins this trace.
+        using (var publish = HrSyncTelemetry.Source.StartActivity("publish new-hires", ActivityKind.Producer))
+        {
+            publish?.SetTag(HrSyncTelemetry.EventIdTag, hire.EventId).SetTag(HrSyncTelemetry.CorrelationIdTag, correlationId);
+            message = message with { TraceParent = (publish ?? Activity.Current)?.Id };
+        }
+
         logger.LogInformation("Queued HRIS webhook {CorrelationId} event {EventId} for employee {EmployeeId}",
             correlationId, hire.EventId, hire.EmployeeId);
 
         return new WebhookReceiverOutput
         {
             Result = new AcceptedResult((string?)null, new WebhookAccepted(correlationId)),
-            Message = new NewHireMessage(hire, correlationId, now),
+            Message = message,
         };
     }
 }

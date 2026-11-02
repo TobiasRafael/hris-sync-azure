@@ -1,3 +1,4 @@
+using HrSync.Core.Diagnostics;
 using HrSync.Core.Enums;
 using HrSync.Core.Errors;
 using HrSync.Core.Mapping;
@@ -17,7 +18,8 @@ public sealed class NewHireProcessor(
         ArgumentNullException.ThrowIfNull(message);
         var eventId = message.Event.EventId;
 
-        switch (await idempotency.TryClaimAsync(eventId, time.GetUtcNow(), ct))
+        var claim = await StepAsync("claim", message, () => idempotency.TryClaimAsync(eventId, time.GetUtcNow(), ct));
+        switch (claim)
         {
             case ClaimResult.AlreadyCompleted:
                 return ProcessResult.Skipped;
@@ -28,14 +30,22 @@ public sealed class NewHireProcessor(
         try
         {
             var employeeId = message.Event.EmployeeId;
-            var employee = await hris.GetEmployeeAsync(employeeId, ct)
-                ?? throw new PermanentIntegrationException($"Employee {employeeId} not found in HRIS.");
+            var employee = await StepAsync("get-employee", message, async () =>
+                await hris.GetEmployeeAsync(employeeId, ct)
+                ?? throw new PermanentIntegrationException($"Employee {employeeId} not found in HRIS."));
 
-            var incoming = mapper.Map(employee);
-            var existing = await care.GetWorkerAsync(incoming.ExternalId!, ct);
-            var worker = existing is null ? incoming : CareWorkerMerge.Apply(existing, incoming);
+            var worker = await StepAsync("merge", message, async () =>
+            {
+                var incoming = mapper.Map(employee);
+                var existing = await care.GetWorkerAsync(incoming.ExternalId!, ct);
+                return existing is null ? incoming : CareWorkerMerge.Apply(existing, incoming);
+            });
 
-            await care.UpsertWorkerAsync(worker, ct);
+            await StepAsync("upsert", message, async () =>
+            {
+                await care.UpsertWorkerAsync(worker, ct);
+                return true;
+            });
             await idempotency.MarkCompletedAsync(eventId, time.GetUtcNow(), ct);
             return ProcessResult.Synced;
         }
@@ -47,6 +57,21 @@ public sealed class NewHireProcessor(
         catch
         {
             await ReleaseQuietlyAsync(eventId);
+            throw;
+        }
+    }
+
+    // Runs one pipeline step inside its own span; a failure marks the span as an error and propagates.
+    private static async Task<T> StepAsync<T>(string name, NewHireMessage message, Func<Task<T>> step)
+    {
+        using var span = HrSyncTelemetry.StartStep(name, message);
+        try
+        {
+            return await step();
+        }
+        catch (Exception ex)
+        {
+            span.RecordError(ex);
             throw;
         }
     }
