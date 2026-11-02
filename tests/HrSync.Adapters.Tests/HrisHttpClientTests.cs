@@ -11,8 +11,7 @@ public class HrisHttpClientTests
     private static (HrisHttpClient Client, StubHttpHandler Stub) Create(Func<HttpRequestMessage, HttpResponseMessage> respond)
     {
         var stub = new StubHttpHandler(respond);
-        var http = new HttpClient(stub) { BaseAddress = new Uri("http://hris.test/") };
-        return (new HrisHttpClient(http), stub);
+        return (TestClients.Hris(stub), stub);
     }
 
     [Fact]
@@ -142,7 +141,7 @@ public class HrisHttpClientTests
         var ex = await Assert.ThrowsAsync<TransientIntegrationException>(
             () => client.GetEmployeeAsync("E-1001", CancellationToken.None));
 
-        Assert.IsType<HttpRequestException>(ex.InnerException);
+        Assert.Contains("connection refused", ex.Message);
     }
 
     [Fact]

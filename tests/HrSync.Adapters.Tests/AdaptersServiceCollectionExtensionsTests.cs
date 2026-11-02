@@ -1,14 +1,17 @@
 using System.Net;
 using HrSync.Adapters.Correlation;
 using HrSync.Adapters.DependencyInjection;
-using HrSync.Core.Errors;
 using HrSync.Core.Ports;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using WireMock.Server;
+using Request = WireMock.RequestBuilders.Request;
+using Response = WireMock.ResponseBuilders.Response;
 
 namespace HrSync.Adapters.Tests;
 
+// DI wiring and config validation. Retry behaviour over real HTTP is in VendorResilienceTests.
 public class AdaptersServiceCollectionExtensionsTests
 {
     private static ServiceProvider Build(StubHttpHandler stub, Dictionary<string, string?> settings)
@@ -26,60 +29,27 @@ public class AdaptersServiceCollectionExtensionsTests
         ["CareApi:BaseUrl"] = "http://localhost:5080/",
     };
 
+    // Over real HTTP: Refit's generated clients don't pick up ConfigureHttpClientDefaults, so a stub can't be injected.
     [Fact]
     public async Task Registered_clients_use_configured_base_urls_and_correlation_header()
     {
-        var stub = new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
-        using var sp = Build(stub, ValidSettings);
+        using var server = WireMockServer.Start();
+        server.Given(Request.Create().UsingGet()).RespondWith(Response.Create().WithStatusCode(404));
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["HrisApi:BaseUrl"] = server.Url,
+            ["CareApi:BaseUrl"] = server.Url + "/",
+        }).Build();
+        using var sp = new ServiceCollection().AddHrSyncAdapters(configuration).BuildServiceProvider();
         sp.GetRequiredService<ICorrelationContext>().CorrelationId = "corr-di";
 
         await sp.GetRequiredService<IHrisClient>().GetEmployeeAsync("E-1001", CancellationToken.None);
         await sp.GetRequiredService<ICareClient>().GetWorkerAsync("E-1001", CancellationToken.None);
 
-        Assert.Equal(
-            ["http://localhost:5080/hris/employees/E-1001", "http://localhost:5080/care/workers/E-1001"],
-            stub.Requests.Select(r => r.Uri.ToString()));
-        Assert.All(stub.Requests, r => Assert.Equal("corr-di", r.CorrelationId));
-    }
-
-    [Fact]
-    public async Task Resilience_handler_retries_transient_status_honoring_retry_after()
-    {
-        var calls = 0;
-        var stub = new StubHttpHandler(_ => ++calls < 3
-            ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Headers = { { "Retry-After", "0" } } }
-            : new HttpResponseMessage(HttpStatusCode.NotFound));
-        using var sp = Build(stub, ValidSettings);
-
-        var employee = await sp.GetRequiredService<IHrisClient>().GetEmployeeAsync("E-1001", CancellationToken.None);
-
-        Assert.Null(employee);
-        Assert.Equal(3, stub.Requests.Count);
-    }
-
-    [Fact]
-    public async Task Persistent_transient_status_gives_up_after_three_retries()
-    {
-        var stub = new StubHttpHandler(_ =>
-            new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Headers = { { "Retry-After", "0" } } });
-        using var sp = Build(stub, ValidSettings);
-
-        await Assert.ThrowsAsync<TransientIntegrationException>(
-            () => sp.GetRequiredService<ICareClient>().GetWorkerAsync("E-1001", CancellationToken.None));
-
-        Assert.Equal(4, stub.Requests.Count);
-    }
-
-    [Fact]
-    public async Task Permanent_status_is_not_retried()
-    {
-        var stub = new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest));
-        using var sp = Build(stub, ValidSettings);
-
-        await Assert.ThrowsAsync<PermanentIntegrationException>(
-            () => sp.GetRequiredService<IHrisClient>().GetEmployeeAsync("E-1001", CancellationToken.None));
-
-        Assert.Single(stub.Requests);
+        var requests = server.LogEntries.Select(e => e.RequestMessage!).ToList();
+        Assert.Equal(["/hris/employees/E-1001", "/care/workers/E-1001"], requests.Select(r => r.Path));
+        Assert.All(requests, r => Assert.Equal("corr-di",
+            r.Headers!.First(h => h.Key.Equals("X-Correlation-Id", StringComparison.OrdinalIgnoreCase)).Value.Single()));
     }
 
     [Theory]

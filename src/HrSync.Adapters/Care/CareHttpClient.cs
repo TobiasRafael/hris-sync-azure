@@ -1,13 +1,14 @@
 using System.Net;
-using System.Net.Http.Json;
 using HrSync.Adapters.Http;
+using HrSync.Core.Errors;
 using HrSync.Core.Models;
 using HrSync.Core.Ports;
+using Refit;
 
 namespace HrSync.Adapters.Care;
 
-// Typed HttpClient; BaseAddress comes from CareApi:BaseUrl.
-public sealed class CareHttpClient(HttpClient http) : ICareClient
+// ICareClient over the Refit ICareApi: 404 on GET => null, other failures classified by VendorErrors.
+public sealed class CareHttpClient(ICareApi api) : ICareClient
 {
     private const string SystemName = "Care API";
 
@@ -15,22 +16,24 @@ public sealed class CareHttpClient(HttpClient http) : ICareClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(externalId);
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, WorkerPath(externalId));
-        using var response = await VendorHttp.SendAsync(http, request, SystemName, allowNotFound: true, ct);
-        if (response.StatusCode == HttpStatusCode.NotFound)
-            return null;
-
-        var dto = await VendorHttp.ReadJsonAsync<CareWorkerDto>(response, SystemName, ct);
-        return new CareWorker
+        CareWorkerDto? dto;
+        try
         {
-            ExternalId = string.IsNullOrWhiteSpace(dto.ExternalId) ? externalId : dto.ExternalId,
-            GivenName = dto.GivenName,
-            FamilyName = dto.FamilyName,
-            Email = dto.Email,
-            Phone = dto.Phone,
-            Role = dto.Role,
-            StartDate = dto.StartDate,
-        };
+            dto = await api.GetWorkerAsync(externalId, ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+        catch (Exception ex) when (VendorErrors.IsVendorFailure(ex, ct))
+        {
+            throw VendorErrors.ToIntegrationException(ex, SystemName);
+        }
+
+        if (dto is null)
+            throw new PermanentIntegrationException($"{SystemName} returned an empty body for worker {externalId}.");
+
+        return CareMapper.ToCareWorker(string.IsNullOrWhiteSpace(dto.ExternalId) ? dto with { ExternalId = externalId } : dto);
     }
 
     // PUT is a full replace on the care side, so send the complete (already merged) record.
@@ -39,15 +42,13 @@ public sealed class CareHttpClient(HttpClient http) : ICareClient
         ArgumentNullException.ThrowIfNull(worker);
         ArgumentException.ThrowIfNullOrWhiteSpace(worker.ExternalId);
 
-        var dto = new CareWorkerDto(
-            worker.ExternalId, worker.GivenName, worker.FamilyName, worker.Email, worker.Phone, worker.Role, worker.StartDate);
-
-        using var request = new HttpRequestMessage(HttpMethod.Put, WorkerPath(worker.ExternalId))
+        try
         {
-            Content = JsonContent.Create(dto, options: VendorJson.Options),
-        };
-        using var response = await VendorHttp.SendAsync(http, request, SystemName, allowNotFound: false, ct);
+            await api.PutWorkerAsync(worker.ExternalId, CareMapper.ToDto(worker), ct);
+        }
+        catch (Exception ex) when (VendorErrors.IsVendorFailure(ex, ct))
+        {
+            throw VendorErrors.ToIntegrationException(ex, SystemName);
+        }
     }
-
-    private static string WorkerPath(string externalId) => $"care/workers/{Uri.EscapeDataString(externalId)}";
 }

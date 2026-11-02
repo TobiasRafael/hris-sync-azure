@@ -8,6 +8,7 @@ using HrSync.Core.Ports;
 using HrSync.Core.Processing;
 using HrSync.Functions.NewHires;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace HrSync.Functions.Tests;
 
@@ -32,7 +33,7 @@ public class ProcessNewHireTests
 
     private ProcessNewHire Function()
     {
-        var time = new FixedTimeProvider(Now);
+        var time = new FakeTimeProvider(Now);
         var processor = new NewHireProcessor(_hris, _care, new AlwaysClaimStore(), Mapper, time);
         return new ProcessNewHire(processor, _correlation, _poison, time, NullLogger<ProcessNewHire>.Instance);
     }
@@ -105,11 +106,6 @@ public class ProcessNewHireTests
         Assert.Equal("corr-1", _hris.SeenCorrelationId);
         // Set inside the async function, so it doesn't leak back to the caller's flow.
         Assert.Null(_correlation.CorrelationId);
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class FakeHris : IHrisClient

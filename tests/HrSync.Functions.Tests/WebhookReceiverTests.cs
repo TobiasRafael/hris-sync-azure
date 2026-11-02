@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 
 namespace HrSync.Functions.Tests;
 
@@ -18,14 +19,9 @@ public class WebhookReceiverTests
     private const string HireBody =
         """{"event_id":"evt-1","event_type":"employee.hired","employee_id":"E-1001","occurred_at":"2026-11-02T08:59:00Z"}""";
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
-
-    private static WebhookReceiver Receiver() => new(
+    private static WebhookReceiver Receiver(TimeProvider? time = null) => new(
         Options.Create(new WebhookOptions { Secret = Secret }),
-        new FixedTimeProvider(Now),
+        time ?? new FakeTimeProvider(Now),
         NullLogger<WebhookReceiver>.Instance);
 
     private static HttpRequest Request(string body, bool sign = true, string? signature = null, string? correlationId = null)
@@ -143,5 +139,17 @@ public class WebhookReceiverTests
         await Receiver().Run(request);
 
         Assert.Equal("corr-401", request.HttpContext.Response.Headers[WebhookReceiver.CorrelationHeader].ToString());
+    }
+
+    [Fact]
+    public async Task Signature_expires_as_the_clock_moves_on()
+    {
+        var time = new FakeTimeProvider(Now);
+        var receiver = Receiver(time);
+
+        Assert.Equal(202, StatusOf((await receiver.Run(Request(HireBody))).Result));
+
+        time.Advance(TimeSpan.FromMinutes(6));
+        Assert.Equal(401, StatusOf((await receiver.Run(Request(HireBody))).Result));
     }
 }
