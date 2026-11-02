@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/HrSync.Adapters.Tests/HrSync.Adapters.Tests.csproj" />
+    <Project Path="tests/HrSync.AppHost.Tests/HrSync.AppHost.Tests.csproj" />
     <Project Path="tests/HrSync.Core.Tests/HrSync.Core.Tests.csproj" />
     <Project Path="tests/HrSync.Functions.Tests/HrSync.Functions.Tests.csproj" />
   </Folder>
