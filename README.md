@@ -193,7 +193,7 @@ requests.http              Manual end-to-end scenarios
 .github/                   CI workflow, Dependabot, test summary script
 ```
 
-`HrSync.Functions` lives at the repo root, not under `src/`. It still contains the unused `Function1.cs` from the project template.
+`HrSync.Functions` lives at the repo root, not under `src/`.
 
 ## Design decisions
 
