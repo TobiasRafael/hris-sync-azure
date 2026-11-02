@@ -10,6 +10,10 @@ using Microsoft.Extensions.Options;
 using Polly;
 using Refit;
 
+// RemoveAllResilienceHandlers is marked experimental (EXTEXP0001); covered by
+// VendorResilienceTests.Host_wide_default_resilience_does_not_stack_on_vendor_retries.
+#pragma warning disable EXTEXP0001
+
 namespace HrSync.Adapters.DependencyInjection;
 
 public static class AdaptersServiceCollectionExtensions
@@ -33,14 +37,18 @@ public static class AdaptersServiceCollectionExtensions
         }
 
         // Handler order: CorrelationIdHandler (outer) -> resilience (retries, timeouts) -> network.
+        // RemoveAllResilienceHandlers drops a host-wide default (e.g. Aspire ServiceDefaults'
+        // ConfigureHttpClientDefaults), so vendor calls are retried by this policy only, not twice.
         services.AddRefitGeneratedClient<IHrisApi>(VendorRefit.Settings)
             .ConfigureHttpClient((sp, http) => http.BaseAddress = BaseAddress(sp, VendorApiOptions.HrisSection))
             .AddHttpMessageHandler<CorrelationIdHandler>()
+            .RemoveAllResilienceHandlers()
             .AddStandardResilienceHandler(Resilience);
 
         services.AddRefitGeneratedClient<ICareApi>(VendorRefit.Settings)
             .ConfigureHttpClient((sp, http) => http.BaseAddress = BaseAddress(sp, VendorApiOptions.CareSection))
             .AddHttpMessageHandler<CorrelationIdHandler>()
+            .RemoveAllResilienceHandlers()
             .AddStandardResilienceHandler(Resilience);
 
         services.AddTransient<IHrisClient, HrisHttpClient>();
