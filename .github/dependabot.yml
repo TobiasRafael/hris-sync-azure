@@ -1,0 +1,45 @@
+version: 2
+
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Aspire hosting/client packages are versioned together; bump them as one.
+      aspire:
+        patterns:
+          - "Aspire.*"
+      microsoft:
+        patterns:
+          - "Microsoft.*"
+          - "System.*"
+          - "Azure.*"
+          - "OpenTelemetry*"
+        exclude-patterns:
+          - "Microsoft.NET.Test.Sdk"
+          - "Microsoft.Extensions.TimeProvider.Testing"
+      test:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+          - "Microsoft.Extensions.TimeProvider.Testing"
+          - "coverlet.*"
+          - "WireMock.Net*"
+          - "Testcontainers*"
+      libraries:
+        patterns:
+          - "Refit*"
+          - "Riok.Mapperly"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns:
+          - "*"
