@@ -23,8 +23,7 @@ public class CareHttpClientTests
     private static (CareHttpClient Client, StubHttpHandler Stub) Create(Func<HttpRequestMessage, HttpResponseMessage> respond)
     {
         var stub = new StubHttpHandler(respond);
-        var http = new HttpClient(stub) { BaseAddress = new Uri("http://care.test/") };
-        return (new CareHttpClient(http), stub);
+        return (TestClients.Care(stub), stub);
     }
 
     [Fact]

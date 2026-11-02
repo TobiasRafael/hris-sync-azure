@@ -18,6 +18,9 @@ internal sealed class StubHttpHandler(Func<HttpRequestMessage, HttpResponseMessa
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(ct);
         var correlationId = request.Headers.TryGetValues("X-Correlation-Id", out var values) ? values.Single() : null;
         Requests.Add(new Recorded(request.Method, request.RequestUri!, correlationId, body));
-        return respond(request);
+        var response = respond(request);
+        // A real handler always links the response to its request; Refit relies on it to build ApiException.
+        response.RequestMessage ??= request;
+        return response;
     }
 }

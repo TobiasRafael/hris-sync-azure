@@ -1,12 +1,14 @@
 using System.Net;
 using HrSync.Adapters.Http;
+using HrSync.Core.Errors;
 using HrSync.Core.Models;
 using HrSync.Core.Ports;
+using Refit;
 
 namespace HrSync.Adapters.Hris;
 
-// Typed HttpClient; BaseAddress comes from HrisApi:BaseUrl.
-public sealed class HrisHttpClient(HttpClient http) : IHrisClient
+// IHrisClient over the Refit IHrisApi: 404 => null, other failures classified by VendorErrors.
+public sealed class HrisHttpClient(IHrisApi api) : IHrisClient
 {
     private const string SystemName = "HRIS";
 
@@ -14,22 +16,23 @@ public sealed class HrisHttpClient(HttpClient http) : IHrisClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"hris/employees/{Uri.EscapeDataString(id)}");
-        using var response = await VendorHttp.SendAsync(http, request, SystemName, allowNotFound: true, ct);
-        if (response.StatusCode == HttpStatusCode.NotFound)
-            return null;
-
-        var dto = await VendorHttp.ReadJsonAsync<HrisEmployeeDto>(response, SystemName, ct);
-        return new Employee
+        HrisEmployeeDto? dto;
+        try
         {
-            Id = string.IsNullOrWhiteSpace(dto.EmployeeId) ? id : dto.EmployeeId,
-            FirstName = dto.FirstName,
-            LastName = dto.LastName,
-            WorkEmail = dto.WorkEmail,
-            PersonalEmail = dto.PersonalEmail,
-            MobilePhone = dto.MobilePhone,
-            JobTitle = dto.JobTitle,
-            HireDate = dto.HireDate,
-        };
+            dto = await api.GetEmployeeAsync(id, ct);
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+        catch (Exception ex) when (VendorErrors.IsVendorFailure(ex, ct))
+        {
+            throw VendorErrors.ToIntegrationException(ex, SystemName);
+        }
+
+        if (dto is null)
+            throw new PermanentIntegrationException($"{SystemName} returned an empty body for employee {id}.");
+
+        return HrisMapper.ToEmployee(string.IsNullOrWhiteSpace(dto.EmployeeId) ? dto with { EmployeeId = id } : dto);
     }
 }

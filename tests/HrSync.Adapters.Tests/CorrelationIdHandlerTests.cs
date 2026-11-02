@@ -10,7 +10,7 @@ public class CorrelationIdHandlerTests
     {
         var stub = new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
         var handler = new CorrelationIdHandler(correlation) { InnerHandler = stub };
-        return (new HrisHttpClient(new HttpClient(handler) { BaseAddress = new Uri("http://hris.test/") }), stub);
+        return (TestClients.Hris(handler), stub);
     }
 
     [Fact]
