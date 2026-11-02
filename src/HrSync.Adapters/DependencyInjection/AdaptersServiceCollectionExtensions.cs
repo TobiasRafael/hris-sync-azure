@@ -72,9 +72,14 @@ public static class AdaptersServiceCollectionExtensions
     private static void AddVendorOptions(IServiceCollection services, IConfiguration configuration, string section) =>
         services.AddOptions<VendorApiOptions>(section)
             .Bind(configuration.GetSection(section))
-            .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out _),
-                $"{section}:BaseUrl must be an absolute URL ({section}__BaseUrl).")
+            .Validate(o => IsHttpUrl(o.BaseUrl),
+                $"{section}:BaseUrl must be an absolute http(s) URL ({section}__BaseUrl).")
             .ValidateOnStart();
+
+    // The scheme check matters on Linux/macOS, where "/path" parses as an absolute file:// URI.
+    private static bool IsHttpUrl(string? value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
     private static Uri BaseAddress(IServiceProvider sp, string section) =>
         new(sp.GetRequiredService<IOptionsMonitor<VendorApiOptions>>().Get(section).BaseUrl);

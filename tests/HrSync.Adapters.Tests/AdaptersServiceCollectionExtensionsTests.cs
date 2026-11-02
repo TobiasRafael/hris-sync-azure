@@ -56,7 +56,9 @@ public class AdaptersServiceCollectionExtensionsTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("not a url")]
-    [InlineData("/relative/path")]
+    [InlineData("/relative/path")] // absolute file:///relative/path on Linux/macOS, so it needs the scheme check
+    [InlineData("file:///etc/hosts")]
+    [InlineData("ftp://hris.test")]
     public void Missing_or_invalid_base_url_fails(string? baseUrl)
     {
         var stub = new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
