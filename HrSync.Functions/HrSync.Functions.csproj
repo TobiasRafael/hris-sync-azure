@@ -10,8 +10,8 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Aspire.Azure.Data.Tables" Version="13.6.4" />
-    <PackageReference Include="Aspire.Azure.Storage.Queues" Version="13.6.4" />
+    <PackageReference Include="Aspire.Azure.Data.Tables" Version="17.0.0" />
+    <PackageReference Include="Aspire.Azure.Storage.Queues" Version="17.0.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Storage.Queues" Version="5.5.5" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.OpenTelemetry" Version="1.2.0" />
